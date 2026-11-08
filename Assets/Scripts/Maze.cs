@@ -10,10 +10,10 @@ public class Maze : MonoBehaviour
     GameObject TheCar;
     Matrix4x4 memory;
     Matrix4x4 ms;
-    int currentTargetIndex = 0;
-    bool isTurning = false;
-    float turnedDegrees = 0f;
-    float currentTurnDirection = 0f;
+    int idx = 0;
+    bool turning = false;
+    float angle = 0f;
+    float turnSide = 0f;
 
     void Start()
     {
@@ -108,7 +108,8 @@ public class Maze : MonoBehaviour
             new Vector3(4, 0, 8),
             new Vector3(3, 0, 8),
             new Vector3(3, 0, 9),
-            new Vector3(1, 0, 9)
+            new Vector3(1, 0, 9),
+            new Vector3(1, 0, 10)
         };
 
         memory = MathLib.TranslateM(new Vector3(0, 0, -10));
@@ -119,94 +120,94 @@ public class Maze : MonoBehaviour
 
     void Update()
     {
+        // Color logic
+        if (turning)
+        {
+            TheCar.GetComponent<MeshRenderer>().material.color = Color.magenta;
+        }
+        else if (idx == points.Count - 1) 
+        {
+            TheCar.GetComponent<MeshRenderer>().material.color = Color.green;
+        }
+        else
+        {
+            TheCar.GetComponent<MeshRenderer>().material.color = Color.blue;
+        }
+
         float dz = 0f;
         float rotY = 0f;
 
-        if (currentTargetIndex < points.Count)
+        if (idx < points.Count)
         {
-            if (!isTurning)
+            if (!turning)
             {
-                // State: Moving forward
                 dz = 0.1f;
-
-                // Where is the cube now?
-                Vector3 currentPos = new Vector3(memory[0, 3], memory[1, 3], memory[2, 3]);
-                Vector3 targetPos = points[currentTargetIndex];
-
-                // If we reached the target point (within step tolerance)
-                if (Vector3.Distance(currentPos, targetPos) <= 0.101f)
+                // current position
+                Vector3 pos = new Vector3(memory[0, 3], memory[1, 3], memory[2, 3]);
+                Vector3 goal = points[idx];
+                goal.x = -goal.x; 
+                // stop moving
+                if (Vector3.Distance(pos, goal) <= 0.101f)
                 {
                     // Where is the cube now?
                     // | a  b  c  x |
                     // | d  e  f  y |
                     // | g  h  i  z |
                     // | 0  0  0  1 |
-                    memory[0, 3] = targetPos.x;
-                    memory[1, 3] = targetPos.y;
-                    memory[2, 3] = targetPos.z;
+                    memory[0, 3] = goal.x;
+                    memory[1, 3] = goal.y;
+                    memory[2, 3] = goal.z;
+                    dz = 0f; 
 
-                    dz = 0f; // Stop moving, prepare to turn
-
-                    if (currentTargetIndex + 1 < points.Count)
+                    if (idx + 1 < points.Count)
                     {
-                        Vector3 nextPos = points[currentTargetIndex + 1];
-                        
-                        // Extract current forward vector from memory's Z axis
-                        Vector3 currentForward = new Vector3(memory[0, 2], memory[1, 2], memory[2, 2]);
-                        Vector3 dirToNext = (nextPos - targetPos).normalized;
+                        Vector3 nextGoal = points[idx + 1];
+                        nextGoal.x = -nextGoal.x;
+                        // current forward vector
+                        Vector3 fwd = new Vector3(memory[0, 2], memory[1, 2], memory[2, 2]);
+                        Vector3 toNext = (nextGoal - goal).normalized;
 
-                        // Use 2D cross product to dynamically determine turn direction
-                        // Matches the table in image_3eecbe.png exactly
-                        float cross = currentForward.z * dirToNext.x - currentForward.x * dirToNext.z;
+                        // Cross Product
+                        float cross = fwd.z * toNext.x - fwd.x * toNext.z;
+                        if (cross > 0.1f) turnSide = 1f;            //left       
+                        else if (cross < -0.1f) turnSide = -1f;     //right
+                        else turnSide = 0f;                         //straight
 
-                        if (cross > 0.1f) currentTurnDirection = 1f;       // Left Turn
-                        else if (cross < -0.1f) currentTurnDirection = -1f; // Right Turn
-                        else currentTurnDirection = 0f;                    // Straight
-
-                        if (currentTurnDirection != 0f)
+                        if (turnSide != 0f)
                         {
-                            isTurning = true;
-                            turnedDegrees = 0f;
+                            turning = true;
+                            angle = 0f;
                         }
                         else
                         {
-                            // Skip straight ahead to next point
-                            currentTargetIndex++;
+                            idx++;
                             dz = 0.1f;
                         }
                     }
                     else
                     {
-                        // Maze finished
-                        currentTargetIndex++;
+                        idx++;
                     }
                 }
             }
             else
             {
-                // State: Rotating at corner
                 dz = 0f;
-                rotY = currentTurnDirection * 1f; // 1 degree per frame
-                turnedDegrees += Mathf.Abs(rotY);
-
-                if (turnedDegrees >= 90f)
+                rotY = turnSide * 1f; 
+                angle += Mathf.Abs(rotY);
+                if (angle >= 90f)
                 {
-                    isTurning = false;
-                    currentTargetIndex++; // Move to next point objective
+                    turning = false;
+                    idx++;
                 }
             }
         }
 
-        // Apply transformations using purely homogeneous matrices as instructed
+        // homogeneous transformations 
         Matrix4x4 mt = MathLib.TranslateM(new Vector3(0, 0, dz));
         Matrix4x4 mr = MathLib.RotateYM(rotY);
-        
         Matrix4x4 matrix = ms * memory * mt * mr;
-        
         TheCar.GetComponent<MeshFilter>().mesh.vertices = MathLib.ApplyTransform(matrix, geometry).ToArray();
-        
-        // Memory "remembers" every change in position/rotation
         memory = memory * mt * mr;
     }
-
 }

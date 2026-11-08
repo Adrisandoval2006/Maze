@@ -6,6 +6,7 @@ using System.Collections.Generic;
 
 public static class MathLib
 {
+    // Transformation Matrices
     public static Matrix4x4 TranslateM(Vector3 offset)
     {
         Matrix4x4 result = Matrix4x4.identity;
